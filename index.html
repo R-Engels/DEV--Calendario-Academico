@@ -32,6 +32,7 @@
         color: var(--primary);
         padding-bottom: 50px;
         user-select: none;
+        touch-action: manipulation;
       }
       .sticky-header {
         position: sticky;
@@ -337,9 +338,7 @@
         </button>
       </div>
     </div>
-
     <div class="container" id="calendario-container"></div>
-
     <div class="container">
       <div class="legenda-topo">
         <span>Matéria</span><span style="text-align: center">Faltas</span
@@ -368,7 +367,6 @@
         "2026-05-01": "Trabalho",
         "2026-06-04": "Corpus Christi",
       };
-
       const CONFIG_MESES = [
         { id: 1, nome: "Fevereiro", dias: 28, start: 0, ano: 2026 },
         { id: 2, nome: "Março", dias: 31, start: 0, ano: 2026 },
@@ -389,9 +387,7 @@
         const container = document.getElementById("calendario-container");
         container.innerHTML = "";
         CONFIG_MESES.forEach((m) => {
-          let html = `<div class="grid-mes" data-mes="${m.id}" data-nome="${m.nome}">
-                <div class="mes-titulo">${m.nome} 2026</div>
-                <div class="dow">DOM</div><div class="dow">SEG</div><div class="dow">TER</div><div class="dow">QUA</div><div class="dow">QUI</div><div class="dow">SEX</div><div class="dow">SÁB</div>`;
+          let html = `<div class="grid-mes" data-mes="${m.id}" data-nome="${m.nome}"><div class="mes-titulo">${m.nome} 2026</div><div class="dow">DOM</div><div class="dow">SEG</div><div class="dow">TER</div><div class="dow">QUA</div><div class="dow">QUI</div><div class="dow">SEX</div><div class="dow">SÁB</div>`;
           for (let i = 0; i < m.start; i++) html += `<div class="dia"></div>`;
           for (let d = 1; d <= m.dias; d++) {
             const dataIso = `${m.ano}-${String(m.id + 1).padStart(
@@ -403,7 +399,6 @@
               recessoHtml = FERIADOS[dataIso]
                 ? `<span class="recesso-nome">${FERIADOS[dataIso]}</span>`
                 : "";
-
             if (!FERIADOS[dataIso] && (m.id > 1 || (m.id === 1 && d >= 9))) {
               if (diaSemana === 1) {
                 tagsHtml +=
@@ -422,10 +417,10 @@
                   criarTag("18:40", "SJ", "topo") +
                   criarTag("20:30", "DC2", "baixo");
               } else if (diaSemana === 5) {
-                // LÓGICA CORRIGIDA: CDC só começa em 15/05/2026
-                const dataAtualObj = new Date(dataIso + "T00:00:00");
-                const dataInicioCDC = new Date("2026-05-15T00:00:00");
-                if (dataAtualObj >= dataInicioCDC) {
+                if (
+                  new Date(dataIso + "T00:00:00") >=
+                  new Date("2026-05-15T00:00:00")
+                ) {
                   tagsHtml += criarTag("19:30", "CDC", "topo");
                 }
                 tagsHtml += criarTag("20:30", "LJ", "baixo");
@@ -433,19 +428,19 @@
             }
             html += `<div class="dia" data-dia="${d}" data-date="${dataIso}"><span class="dia-num">${d}</span>${tagsHtml}${recessoHtml}</div>`;
           }
-          html += `</div>`;
-          container.innerHTML += html;
+          container.innerHTML += html + `</div>`;
         });
       }
 
       function criarTag(hora, cod, pos) {
         return `<div class="tag" style="background:${MATERIAS[cod].c}" data-materia="${cod}" data-pos="${pos}"
-                onmousedown="startHold(this, '${cod}', '${pos}')" onmouseup="endHold(this, '${cod}')" 
-                ontouchstart="startHold(this, '${cod}', '${pos}')" ontouchend="endHold(this, '${cod}')">
+                onmousedown="startHold(event, this, '${cod}', '${pos}')" onmouseup="endHold(event, this, '${cod}')" 
+                ontouchstart="startHold(event, this, '${cod}', '${pos}')" ontouchend="endHold(event, this, '${cod}')">
                 <span>${hora}</span>${MATERIAS[cod].n}</div>`;
       }
 
-      function startHold(el, cod, pos) {
+      function startHold(e, el, cod, pos) {
+        e.preventDefault();
         el.classList.add("holding");
         timer = setTimeout(() => {
           const dataIso = el.closest(".dia").dataset.date;
@@ -463,7 +458,8 @@
         }, 600);
       }
 
-      function endHold(el, cod) {
+      function endHold(e, el, cod) {
+        e.preventDefault();
         el.classList.remove("holding");
         if (el.dataset.hold === "true") {
           delete el.dataset.hold;
@@ -523,87 +519,87 @@
       }
 
       function renderizar() {
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const dHoje = hoje.getDate(),
-          mHoje = hoje.getMonth();
+        const agora = new Date();
+        const hoje = new Date(
+          agora.getFullYear(),
+          agora.getMonth(),
+          agora.getDate()
+        );
+        const hojeIso =
+          hoje.getFullYear() +
+          "-" +
+          String(hoje.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(hoje.getDate()).padStart(2, "0");
+
         let totS = 0,
-          passS = 0;
-        let provasProximas = [];
+          passS = 0,
+          provasProximas = [];
         const rel = document.getElementById("relatorio-lista");
         rel.innerHTML = "";
 
         Object.keys(MATERIAS).forEach((cod) => {
           const lim = MATERIAS[cod].h * 0.25;
           const cr = faltasDb.filter((id) => id.endsWith(cod)).length * 2;
-          let classeStatus = "";
-          if (cr >= lim) classeStatus = "status-perigo";
-          else if (cr >= lim - 2) classeStatus = "status-limite-proximo";
-
-          let aM = 0,
-            pM = 0;
-          document
-            .querySelectorAll(`[data-materia="${cod}"]`)
-            .forEach((tag) => {
-              aM++;
-              const mesNum = parseInt(tag.closest(".grid-mes").dataset.mes);
-              const diaNum = parseInt(tag.closest(".dia").dataset.dia);
-              if (mesNum < mHoje || (mesNum === mHoje && diaNum < dHoje)) pM++;
-            });
-          const perc = Math.round((pM / aM) * 100) || 0;
-          rel.innerHTML += `<div class="materia-row"><div class="materia-info"><b>${MATERIAS[cod].n}</b><span>Progresso: ${perc}%</span></div><div class="td-count ${classeStatus}">${cr}</div><div class="td-count" style="color:#cbd5e1">${lim}</div></div>`;
+          let classeStatus =
+            cr >= lim
+              ? "status-perigo"
+              : cr >= lim - 2
+              ? "status-limite-proximo"
+              : "";
+          rel.innerHTML += `<div class="materia-row"><div class="materia-info"><b>${MATERIAS[cod].n}</b><span>Total: ${MATERIAS[cod].h}h</span></div><div class="td-count ${classeStatus}">${cr}</div><div class="td-count" style="color:#cbd5e1">${lim}</div></div>`;
         });
 
-        document.querySelectorAll(".grid-mes").forEach((grid) => {
-          const mesNum = parseInt(grid.dataset.mes);
-          grid.querySelectorAll(".dia").forEach((diaDiv) => {
-            const d = parseInt(diaDiv.dataset.dia);
-            if (!d) return;
-            const dataIso = diaDiv.dataset.date;
-            const dataObj = new Date(dataIso + "T00:00:00");
-            const diff = Math.ceil((dataObj - hoje) / 86400000);
-            const tags = diaDiv.querySelectorAll(".tag");
-            if (tags.length > 0) totS++;
+        document.querySelectorAll(".dia").forEach((diaDiv) => {
+          const dataIso = diaDiv.dataset.date;
+          if (!dataIso) return;
+          const tags = diaDiv.querySelectorAll(".tag");
+          if (tags.length > 0) totS++;
 
-            diaDiv.classList.remove(
-              "hoje",
-              "passado",
-              "prova-topo",
-              "prova-baixo"
-            );
-            if (mesNum === mHoje && d === dHoje) diaDiv.classList.add("hoje");
-            else if (mesNum < mHoje || (mesNum === mHoje && d < dHoje)) {
-              diaDiv.classList.add("passado");
-              if (tags.length > 0) passS++;
-            }
+          diaDiv.classList.remove(
+            "hoje",
+            "passado",
+            "prova-topo",
+            "prova-baixo"
+          );
+          if (dataIso === hojeIso) {
+            diaDiv.classList.add("hoje");
+          } else if (dataIso < hojeIso) {
+            diaDiv.classList.add("passado");
+            if (tags.length > 0) passS++;
+          }
 
-            tags.forEach((tag) => {
-              const cod = tag.dataset.materia;
-              const idF = `${grid.dataset.nome}-${d}-${cod}`;
-              const idP = `${dataIso}-${cod}-${tag.dataset.pos}`;
-              tag.classList.toggle("com-falta", faltasDb.includes(idF));
-              if (provasDb.includes(idP)) {
-                diaDiv.classList.add(
-                  tag.dataset.pos === "topo" ? "prova-topo" : "prova-baixo"
+          tags.forEach((tag) => {
+            const cod = tag.dataset.materia;
+            const idF = `${tag.closest(".grid-mes").dataset.nome}-${
+              diaDiv.dataset.dia
+            }-${cod}`;
+            const idP = `${dataIso}-${cod}-${tag.dataset.pos}`;
+            tag.classList.toggle("com-falta", faltasDb.includes(idF));
+            if (provasDb.includes(idP)) {
+              diaDiv.classList.add(
+                tag.dataset.pos === "topo" ? "prova-topo" : "prova-baixo"
+              );
+              const diff = Math.ceil(
+                (new Date(dataIso + "T00:00:00") - hoje) / 86400000
+              );
+              if (diff >= 0 && diff <= 7)
+                provasProximas.push(
+                  `• ${MATERIAS[cod].n} (${diaDiv.dataset.dia}/${
+                    tag.closest(".grid-mes").dataset.nome
+                  })`
                 );
-                if (diff >= 0 && diff <= 7)
-                  provasProximas.push(
-                    `• ${MATERIAS[cod].n} (${d} de ${grid.dataset.nome})`
-                  );
-              }
-            });
+            }
           });
         });
 
         const alertaBox = document.getElementById("alerta-box");
-        if (provasProximas.length > 0) {
-          alertaBox.style.display = "block";
-          alertaBox.innerHTML =
-            `🚨 <b>PROVAS NOS PRÓXIMOS 7 DIAS:</b><br>` +
-            provasProximas
-              .map((p) => `<span class="alerta-item">${p}</span>`)
-              .join("");
-        } else alertaBox.style.display = "none";
+        alertaBox.style.display = provasProximas.length > 0 ? "block" : "none";
+        alertaBox.innerHTML =
+          `🚨 <b>PROVAS PRÓXIMAS:</b><br>` +
+          provasProximas
+            .map((p) => `<span class="alerta-item">${p}</span>`)
+            .join("");
 
         const percGeral = Math.round((passS / totS) * 100) || 0;
         document.getElementById("barra-fill").style.width = percGeral + "%";
